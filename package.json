@@ -1,0 +1,21 @@
+{
+  "name": "312-bot-api",
+  "version": "1.0.0",
+  "description": "API server for 312 bot to handle Roblox ban operations",
+  "main": "request.js",
+  "scripts": {
+    "start": "node request.js",
+    "dev": "nodemon request.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["api", "roblox", "ban", "discord"],
+  "author": "",
+  "license": "ISC"
+}

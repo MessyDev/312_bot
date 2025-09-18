@@ -312,7 +312,7 @@ async def restore(interaction: discord.Interaction, username: str, items: str):
 
     await interaction.response.defer()
 
-    # Send request to API server
+    # requst
     api_url = os.getenv('API_SERVER_URL', 'http://localhost:3000')
     payload = {
         "username": username,

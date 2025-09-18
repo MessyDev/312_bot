@@ -1,6 +1,6 @@
 # Discord Bot - 312_bot
 
-A Discord bot that saves messages from the 'announcements' channel to Google Sheets.
+A Discord bot made specifically for D:312.
 
 ## Setup
 

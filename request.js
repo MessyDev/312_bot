@@ -29,19 +29,29 @@ async function getRobloxUserId(username) {
 
 // POST endpoint for banning users
 app.post('/ban', async (req, res) => {
+    console.log('Ban request received:', req.body);
     const { platform, username, reason = 'No reason provided' } = req.body;
 
     if (!platform || !username) {
+        console.log('Missing platform or username');
         return res.status(400).json({ error: 'Platform and username are required' });
     }
 
     if (platform === 'roblox') {
+        console.log('Roblox API Key present:', !!ROBLOX_API_KEY);
+        console.log('Roblox Universe ID present:', !!ROBLOX_UNIVERSE_ID);
+
         if (!ROBLOX_API_KEY || !ROBLOX_UNIVERSE_ID) {
+            console.log('Missing Roblox API credentials');
             return res.status(500).json({ error: 'Roblox API key or Universe ID not configured' });
         }
 
+        console.log('Getting user ID for username:', username);
         const userId = await getRobloxUserId(username);
+        console.log('User ID result:', userId);
+
         if (!userId) {
+            console.log('User not found');
             return res.status(404).json({ error: 'Roblox user not found' });
         }
 
@@ -75,12 +85,18 @@ app.post('/ban', async (req, res) => {
                 datastoreName: 'BannedUsers',
                 entryKey: 'BannedList'
             };
-            await axios.post(getUrl, bannedList, { params: setParams, headers });
+            try {
+                // Roblox expects the entry value to be an object with a "value" property
+                await axios.post(getUrl, { value: bannedList }, { params: setParams, headers });
+            } catch (postError) {
+                console.error('Error posting updated banned list:', postError.response ? postError.response.data : postError.message);
+                throw postError;
+            }
 
             console.log(`Banned Roblox user ${username} (ID: ${userId}) for reason: ${reason}`);
             res.json({ success: true, message: `Roblox user ${username} has been banned`, userId, reason });
         } catch (error) {
-            console.error('Error banning Roblox user:', error.message);
+            console.error('Error banning Roblox user:', error.response ? error.response.data : error.message);
             res.status(500).json({ error: 'Failed to ban Roblox user' });
         }
     } else {
@@ -110,7 +126,8 @@ app.get('/banlist', async (req, res) => {
             const headers = { 'x-api-key': ROBLOX_API_KEY };
 
             const response = await axios.get(getUrl, { params, headers });
-            const bannedList = response.data || [];
+            // Roblox returns the entry value wrapped in a "value" property
+            const bannedList = response.data && response.data.value ? response.data.value : [];
 
             res.json({ success: true, bannedUsers: bannedList });
         } catch (error) {

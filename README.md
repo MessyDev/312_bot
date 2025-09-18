@@ -47,29 +47,57 @@ This bot now includes a `/ban` slash command to ban users on Discord or Roblox.
 
 ### Roblox Ban
 
-- Placeholder implementation to ban a user on Roblox.
-- You need to set up your Roblox game's ban system and provide API credentials.
+- Bans users locally by storing their User IDs in a JSON file.
+- The API server maintains the ban list and provides it to Roblox scripts.
+- Roblox scripts poll the API server every second to check for banned users.
 
-### Setup for Roblox Ban System
+### Setup for Local Roblox Ban System
 
-1. **Create or use a Roblox game**: The bot is configured for game ID 122343477195976 (Universe ID: 8709300312). If using your own game, update the code accordingly.
-2. **Find your Universe ID**: Go to your Roblox game page, the Universe ID is in the URL or can be found via Roblox API. For example, use https://apis.roblox.com/universes/v1/places/122343477195976/universe to get the universe ID.
-3. **Set up Roblox Open Cloud API**:
-   - Go to [Roblox Creator Dashboard](https://create.roblox.com/dashboard).
-   - Select your experience (game).
-   - Go to Game Settings > Security > API Keys.
-   - Click "Create API Key".
-   - Name it (e.g., "Ban System API").
-   - Select scopes: Enable "DataStore" (Read/Write).
-   - Set restrictions: You can limit to specific DataStore names if desired (e.g., "BannedUsers").
-   - Click "Create API Key" and copy the generated key.
-4. **Implement ban checking in your Roblox game**:
-   - In your game's server script, check the "BannedUsers" DataStore entry "BannedList" on player join.
-   - If the player's UserId is in the list, kick or ban them.
-5. **Set environment variables in your `.env` file**:
-   - `ROBLOX_API_KEY`: Your Roblox Open Cloud API key.
-   - `ROBLOX_UNIVERSE_ID`: Your Roblox game universe ID.
-6. The bot will automatically add banned users to the DataStore when using the /ban command.
+1. **Start the API server**:
+   ```bash
+   npm install
+   npm start
+   ```
+
+2. **Implement ban checking in your Roblox game**:
+   - Add a server script that polls the API server every second
+   - Check if any current players' UserIds are in the banned list
+   - Kick players who are banned
+
+3. **Example Roblox server script**:
+   ```lua
+   local HttpService = game:GetService("HttpService")
+   local Players = game:GetService("Players")
+
+   local API_URL = "http://your-server-ip:3000/banlist?platform=roblox"
+
+   local function checkBanList()
+       local success, response = pcall(function()
+           return HttpService:GetAsync(API_URL)
+       end)
+
+       if success then
+           local data = HttpService:JSONDecode(response)
+           if data.success and data.bannedUsers then
+               for _, player in ipairs(Players:GetPlayers()) do
+                   if table.find(data.bannedUsers, player.UserId) then
+                       player:Kick("You have been banned from this game.")
+                   end
+               end
+           end
+       end
+   end
+
+   while true do
+       checkBanList()
+       wait(1)
+   end
+   ```
+
+4. **Set environment variables in your `.env` file**:
+   - `API_SERVER_URL`: URL of your API server (default: http://localhost:3000)
+
+5. The bot will add banned users to the local ban list when using the /ban command.
 
 ### Environment Variables
 

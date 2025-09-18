@@ -61,25 +61,53 @@ async def ban_discord_user(guild: discord.Guild, user: discord.Member, reason: s
 
 # functions for roblox ban system
 
-def roblox_ban_user(username: str, reason: str):
+def roblox_ban_user(username: str, reason: str, duration: str = None):
     """
     Ban a user on Roblox using the local API server.
     """
     api_url = os.getenv('API_SERVER_URL', 'http://localhost:3000')
 
     try:
-        response = requests.post(f"{api_url}/ban", json={
+        payload = {
             "platform": "roblox",
             "username": username,
             "reason": reason
+        }
+        if duration:
+            payload["duration"] = duration
+
+        response = requests.post(f"{api_url}/ban", json=payload)
+
+        if response.status_code == 200:
+            data = response.json()
+            duration_msg = f" for {duration}" if duration else ""
+            print(f"Banned Roblox user {username} for reason: {reason}{duration_msg}")
+            return True
+        else:
+            print(f"Failed to ban user: {response.status_code} - {response.text}")
+            return False
+    except Exception as e:
+        print(f"Error communicating with API server: {e}")
+        return False
+
+def roblox_unban_user(username: str):
+    """
+    Unban a user on Roblox using the local API server.
+    """
+    api_url = os.getenv('API_SERVER_URL', 'http://localhost:3000')
+
+    try:
+        response = requests.post(f"{api_url}/unban", json={
+            "platform": "roblox",
+            "username": username
         })
 
         if response.status_code == 200:
             data = response.json()
-            print(f"Banned Roblox user {username} for reason: {reason}")
+            print(f"Unbanned Roblox user {username}")
             return True
         else:
-            print(f"Failed to ban user: {response.status_code} - {response.text}")
+            print(f"Failed to unban user: {response.status_code} - {response.text}")
             return False
     except Exception as e:
         print(f"Error communicating with API server: {e}")
@@ -119,13 +147,14 @@ def has_ban_permission(interaction: discord.Interaction) -> bool:
     platform="the platform to ban user on (discord or roblox)",
     discord_user="discord user to ban (required if platform is discord)",
     roblox_username="roblox username to ban (required if platform is roblox)",
-    reason="reason for the ban"
+    reason="reason for the ban",
+    duration="ban duration (e.g., 30s, 1m, 5h, 10d, 2y) - only for Roblox bans"
 )
 @app_commands.choices(platform=[
     app_commands.Choice(name="discord", value="discord"),
     app_commands.Choice(name="roblox", value="roblox")
 ])
-async def ban(interaction: discord.Interaction, platform: app_commands.Choice[str], discord_user: discord.Member = None, roblox_username: str = None, reason: str = "No reason provided"):
+async def ban(interaction: discord.Interaction, platform: app_commands.Choice[str], discord_user: discord.Member = None, roblox_username: str = None, reason: str = "No reason provided", duration: str = None):
     if not has_ban_permission(interaction):
         await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
         return
@@ -141,10 +170,132 @@ async def ban(interaction: discord.Interaction, platform: app_commands.Choice[st
             await interaction.response.send_message("You must specify a Roblox username to ban.", ephemeral=True)
             return
         await interaction.response.defer()
-        success = roblox_ban_user(roblox_username, reason)
+        success = roblox_ban_user(roblox_username, reason, duration)
         if success:
-            await interaction.followup.send(f"Roblox user {roblox_username} has been banned. Reason: {reason}")
+            duration_msg = f" for {duration}" if duration else ""
+            await interaction.followup.send(f"Roblox user {roblox_username} has been banned{duration_msg}. Reason: {reason}")
         else:
             await interaction.followup.send(f"Failed to ban Roblox user {roblox_username}.", ephemeral=True)
+
+# command for unbanning users
+@bot.tree.command(name="unban", description="Unban a user on Roblox")
+@app_commands.guilds(GUILD)   # <-- make it server-scoped
+@app_commands.describe(
+    roblox_username="roblox username to unban"
+)
+async def unban(interaction: discord.Interaction, roblox_username: str):
+    if not has_ban_permission(interaction):
+        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        return
+
+    await interaction.response.defer()
+    success = roblox_unban_user(roblox_username)
+    if success:
+        await interaction.followup.send(f"Roblox user {roblox_username} has been unbanned.")
+    else:
+        await interaction.followup.send(f"Failed to unban Roblox user {roblox_username}.", ephemeral=True)
+
+# command for getting ban list with pagination
+@bot.tree.command(name="getbanlist", description="Get the list of banned Roblox users")
+@app_commands.guilds(GUILD)   # <-- make it server-scoped
+async def getbanlist(interaction: discord.Interaction):
+    if not has_ban_permission(interaction):
+        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        return
+
+    await interaction.response.defer()
+
+    banned_users = get_roblox_ban_list()
+    if not banned_users:
+        await interaction.followup.send("No banned users found.")
+        return
+
+    # Pagination setup
+    items_per_page = 10
+    total_pages = (len(banned_users) + items_per_page - 1) // items_per_page
+
+    # Create embed for first page
+    embed = discord.Embed(title="Banned Roblox Users", color=0xff0000)
+
+    # Display current page (starting from 1)
+    current_page = 1
+    start_idx = (current_page - 1) * items_per_page
+    end_idx = min(start_idx + items_per_page, len(banned_users))
+
+    ban_list_text = ""
+    for i in range(start_idx, end_idx):
+        ban = banned_users[i]
+        username = ban.get('username', f'User {ban["userId"]}')
+        reason = ban.get('reason', 'No reason')
+        duration = ban.get('duration', 'Permanent')
+        expires_at = ban.get('expiresAt')
+
+        if expires_at:
+            expires_date = f"<t:{int(expires_at / 1000)}:R>"
+        else:
+            expires_date = "Never"
+
+        ban_list_text += f"**{username}** (ID: {ban['userId']})\n"
+        ban_list_text += f"Reason: {reason}\n"
+        ban_list_text += f"Duration: {duration} | Expires: {expires_date}\n\n"
+
+    embed.description = ban_list_text
+    embed.set_footer(text=f"Page {current_page}/{total_pages}")
+
+    # Add navigation buttons if more than one page
+    view = None
+    if total_pages > 1:
+        view = BanListView(banned_users, items_per_page, total_pages, current_page)
+
+    await interaction.followup.send(embed=embed, view=view)
+
+# View class for pagination buttons
+class BanListView(discord.ui.View):
+    def __init__(self, banned_users, items_per_page, total_pages, current_page):
+        super().__init__(timeout=300)  # 5 minutes timeout
+        self.banned_users = banned_users
+        self.items_per_page = items_per_page
+        self.total_pages = total_pages
+        self.current_page = current_page
+
+    @discord.ui.button(label="⬅️ Previous", style=discord.ButtonStyle.primary)
+    async def previous_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page > 1:
+            self.current_page -= 1
+            await self.update_embed(interaction)
+
+    @discord.ui.button(label="➡️ Next", style=discord.ButtonStyle.primary)
+    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page < self.total_pages:
+            self.current_page += 1
+            await self.update_embed(interaction)
+
+    async def update_embed(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="Banned Roblox Users", color=0xff0000)
+
+        start_idx = (self.current_page - 1) * self.items_per_page
+        end_idx = min(start_idx + self.items_per_page, len(self.banned_users))
+
+        ban_list_text = ""
+        for i in range(start_idx, end_idx):
+            ban = self.banned_users[i]
+            username = ban.get('username', f'User {ban["userId"]}')
+            reason = ban.get('reason', 'No reason')
+            duration = ban.get('duration', 'Permanent')
+            expires_at = ban.get('expiresAt')
+
+            if expires_at:
+                expires_date = f"<t:{int(expires_at / 1000)}:R>"
+            else:
+                expires_date = "Never"
+
+            ban_list_text += f"**{username}** (ID: {ban['userId']})\n"
+            ban_list_text += f"Reason: {reason}\n"
+            ban_list_text += f"Duration: {duration} | Expires: {expires_date}\n\n"
+
+        embed.description = ban_list_text
+        embed.set_footer(text=f"Page {self.current_page}/{self.total_pages}")
+
+        await interaction.response.edit_message(embed=embed, view=self)
 
 bot.run(DISCORD_TOKEN)

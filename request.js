@@ -38,6 +38,50 @@ function saveBanList(banList) {
 // Initialize ban list
 let bannedUsers = loadBanList();
 
+// Helper function to parse duration string (e.g., "30s", "1m", "5h", "10d", "2y")
+function parseDuration(durationStr) {
+    if (!durationStr) return null;
+
+    const match = durationStr.match(/^(\d+)([smhdy])$/);
+    if (!match) return null;
+
+    const value = parseInt(match[1]);
+    const unit = match[2];
+
+    let seconds = 0;
+    switch (unit) {
+        case 's': seconds = value; break;
+        case 'm': seconds = value * 60; break;
+        case 'h': seconds = value * 3600; break;
+        case 'd': seconds = value * 86400; break;
+        case 'y': seconds = value * 31536000; break; // 365 days
+    }
+
+    return seconds;
+}
+
+// Helper function to clean expired bans
+function cleanExpiredBans() {
+    const now = Date.now();
+    const originalLength = bannedUsers.length;
+
+    bannedUsers = bannedUsers.filter(ban => {
+        if (ban.expiresAt && ban.expiresAt <= now) {
+            console.log(`Ban expired for user ID: ${ban.userId}`);
+            return false;
+        }
+        return true;
+    });
+
+    if (bannedUsers.length !== originalLength) {
+        saveBanList(bannedUsers);
+    }
+}
+
+// Clean expired bans on startup and every minute
+setInterval(cleanExpiredBans, 60000);
+cleanExpiredBans();
+
 // Helper function to get Roblox user ID from username
 async function getRobloxUserId(username) {
     try {
@@ -56,7 +100,7 @@ async function getRobloxUserId(username) {
 // POST endpoint for banning users
 app.post('/ban', async (req, res) => {
     console.log('Ban request received:', req.body);
-    const { platform, username, reason = 'No reason provided' } = req.body;
+    const { platform, username, reason = 'No reason provided', duration } = req.body;
 
     if (!platform || !username) {
         console.log('Missing platform or username');
@@ -75,20 +119,41 @@ app.post('/ban', async (req, res) => {
 
         try {
             // Check if user is already banned
-            if (!bannedUsers.includes(userId)) {
-                bannedUsers.push(userId);
-                saveBanList(bannedUsers);
-                console.log(`Banned Roblox user ${username} (ID: ${userId}) for reason: ${reason}`);
-            } else {
+            const existingBan = bannedUsers.find(ban => ban.userId === userId);
+            if (existingBan) {
                 console.log(`User ${username} (ID: ${userId}) is already banned`);
+                return res.status(409).json({ error: 'User is already banned' });
             }
+
+            // Parse duration if provided
+            let expiresAt = null;
+            if (duration) {
+                const durationSeconds = parseDuration(duration);
+                if (durationSeconds) {
+                    expiresAt = Date.now() + (durationSeconds * 1000);
+                } else {
+                    return res.status(400).json({ error: 'Invalid duration format. Use format like: 30s, 1m, 5h, 10d, 2y' });
+                }
+            }
+
+            const banEntry = {
+                userId: userId,
+                username: username,
+                reason: reason,
+                bannedAt: Date.now(),
+                expiresAt: expiresAt,
+                duration: duration || null
+            };
+
+            bannedUsers.push(banEntry);
+            saveBanList(bannedUsers);
+            console.log(`Banned Roblox user ${username} (ID: ${userId}) for reason: ${reason}${duration ? `, duration: ${duration}` : ''}`);
 
             res.json({
                 success: true,
-                message: `Roblox user ${username} has been banned`,
-                userId,
-                reason,
-                bannedUsers: bannedUsers
+                message: `Roblox user ${username} has been banned${duration ? ` for ${duration}` : ''}`,
+                banEntry: banEntry,
+                bannedUsers: bannedUsers.map(ban => ban.userId) // Return just userIds for compatibility
             });
         } catch (error) {
             console.error('Error banning Roblox user:', error.message);
@@ -114,6 +179,53 @@ app.get('/banlist', (req, res) => {
             bannedUsers: bannedUsers,
             count: bannedUsers.length
         });
+    } else {
+        res.status(400).json({ error: 'Unsupported platform. Only "roblox" is supported for now.' });
+    }
+});
+
+// POST endpoint for unbanning users
+app.post('/unban', async (req, res) => {
+    console.log('Unban request received:', req.body);
+    const { platform, username } = req.body;
+
+    if (!platform || !username) {
+        console.log('Missing platform or username');
+        return res.status(400).json({ error: 'Platform and username are required' });
+    }
+
+    if (platform === 'roblox') {
+        console.log('Getting user ID for username:', username);
+        const userId = await getRobloxUserId(username);
+        console.log('User ID result:', userId);
+
+        if (!userId) {
+            console.log('User not found');
+            return res.status(404).json({ error: 'Roblox user not found' });
+        }
+
+        try {
+            // Find and remove the ban
+            const banIndex = bannedUsers.findIndex(ban => ban.userId === userId);
+            if (banIndex === -1) {
+                console.log(`User ${username} (ID: ${userId}) is not banned`);
+                return res.status(404).json({ error: 'User is not banned' });
+            }
+
+            const removedBan = bannedUsers.splice(banIndex, 1)[0];
+            saveBanList(bannedUsers);
+            console.log(`Unbanned Roblox user ${username} (ID: ${userId})`);
+
+            res.json({
+                success: true,
+                message: `Roblox user ${username} has been unbanned`,
+                removedBan: removedBan,
+                bannedUsers: bannedUsers.map(ban => ban.userId) // Return just userIds for compatibility
+            });
+        } catch (error) {
+            console.error('Error unbanning Roblox user:', error.message);
+            res.status(500).json({ error: 'Failed to unban Roblox user' });
+        }
     } else {
         res.status(400).json({ error: 'Unsupported platform. Only "roblox" is supported for now.' });
     }

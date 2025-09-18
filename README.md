@@ -38,7 +38,9 @@ This bot now includes a `/ban` slash command to ban users on Discord or Roblox.
 
 ### Usage
 
-- `/ban platform:<discord|roblox> discord_user:@user roblox_username:<username> reason:<reason>`
+- `/ban platform:<discord|roblox> discord_user:@user roblox_username:<username> reason:<reason> duration:<duration>`
+- `/unban roblox_username:<username>`
+- `/getbanlist`
 
 ### Discord Ban
 
@@ -47,9 +49,11 @@ This bot now includes a `/ban` slash command to ban users on Discord or Roblox.
 
 ### Roblox Ban
 
-- Bans users locally by storing their User IDs in a JSON file.
+- Bans users locally by storing their User IDs in a JSON file with ban details.
+- Supports ban duration (e.g., 30s, 1m, 5h, 10d, 2y) with automatic expiration.
 - The API server maintains the ban list and provides it to Roblox scripts.
 - Roblox scripts poll the API server every second to check for banned users.
+- Includes unban functionality and paginated ban list viewing.
 
 ### Setup for Local Roblox Ban System
 

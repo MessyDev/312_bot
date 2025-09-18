@@ -13,6 +13,9 @@ app.use(express.json());
 // Local storage for ban list
 const BAN_LIST_FILE = path.join(__dirname, 'ban_list.json');
 
+// Local storage for restoration queue
+const RESTORATION_QUEUE_FILE = path.join(__dirname, 'restoration_queue.json');
+
 // Helper function to load ban list from file
 function loadBanList() {
     try {
@@ -234,6 +237,103 @@ app.post('/unban', async (req, res) => {
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'OK', message: 'API server is running' });
+});
+
+// Helper function to load restoration queue from file
+function loadRestorationQueue() {
+    try {
+        if (fs.existsSync(RESTORATION_QUEUE_FILE)) {
+            const data = fs.readFileSync(RESTORATION_QUEUE_FILE, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (error) {
+        console.error('Error loading restoration queue:', error);
+    }
+    return [];
+}
+
+// Helper function to save restoration queue to file
+function saveRestorationQueue(queue) {
+    try {
+        fs.writeFileSync(RESTORATION_QUEUE_FILE, JSON.stringify(queue, null, 2));
+    } catch (error) {
+        console.error('Error saving restoration queue:', error);
+    }
+}
+
+// Initialize restoration queue
+let restorationQueue = loadRestorationQueue();
+
+// POST endpoint for adding to restoration queue
+app.post('/restore', async (req, res) => {
+    console.log('Restore request received:', req.body);
+    const { username, items } = req.body;
+
+    if (!username || !items) {
+        return res.status(400).json({ error: 'Username and items are required' });
+    }
+
+    // Parse items string into array if it's a comma-separated string
+    let itemsArray = [];
+    if (Array.isArray(items)) {
+        itemsArray = items;
+    } else if (typeof items === 'string') {
+        itemsArray = items.split(',').map(item => item.trim()).filter(item => item.length > 0);
+    } else {
+        return res.status(400).json({ error: 'Items must be an array or comma-separated string' });
+    }
+
+    // Check if user already has a restoration queue entry
+    const existingEntryIndex = restorationQueue.findIndex(entry => entry.username.toLowerCase() === username.toLowerCase());
+    if (existingEntryIndex !== -1) {
+        // Update existing entry's items
+        restorationQueue[existingEntryIndex].items = itemsArray;
+    } else {
+        // Add new entry
+        restorationQueue.push({
+            username: username,
+            items: itemsArray,
+            queuedAt: Date.now()
+        });
+    }
+
+    saveRestorationQueue(restorationQueue);
+
+    res.json({
+        success: true,
+        message: `Restoration queue updated for user ${username}`,
+        restorationQueue: restorationQueue
+    });
+});
+
+// GET endpoint for retrieving restoration queue
+app.get('/restorationqueue', (req, res) => {
+    console.log('Returning restoration queue:', restorationQueue);
+    res.json({
+        success: true,
+        queue: restorationQueue,
+        count: restorationQueue.length
+    });
+});
+
+// POST endpoint for confirming restoration done by Roblox script
+app.post('/restore/confirm', (req, res) => {
+    console.log('Restore confirmation received:', req.body);
+    const { username } = req.body;
+
+    if (!username) {
+        return res.status(400).json({ error: 'Username is required' });
+    }
+
+    // Remove the restoration queue entry for the user
+    const index = restorationQueue.findIndex(entry => entry.username.toLowerCase() === username.toLowerCase());
+    if (index !== -1) {
+        restorationQueue.splice(index, 1);
+        saveRestorationQueue(restorationQueue);
+        res.json({ success: true, message: `Restoration confirmed and queue cleared for user ${username}` });
+    } else {
+        res.status(404).json({ error: 'No restoration queue entry found for this user' });
+    }
 });
 
 app.listen(PORT, () => {

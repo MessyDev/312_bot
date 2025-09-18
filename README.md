@@ -41,6 +41,7 @@ This bot now includes a `/ban` slash command to ban users on Discord or Roblox.
 - `/ban platform:<discord|roblox> discord_user:@user roblox_username:<username> reason:<reason> duration:<duration>`
 - `/unban roblox_username:<username>`
 - `/getbanlist`
+- `/restore username:<username> items:<item1,item2,item3>`
 
 ### Discord Ban
 

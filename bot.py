@@ -211,7 +211,7 @@ async def getbanlist(interaction: discord.Interaction):
         return
 
     # Pagination setup
-    items_per_page = 10
+    items_per_page = 5
     total_pages = (len(banned_users) + items_per_page - 1) // items_per_page
 
     # Create embed for first page
@@ -243,11 +243,11 @@ async def getbanlist(interaction: discord.Interaction):
     embed.set_footer(text=f"Page {current_page}/{total_pages}")
 
     # Add navigation buttons if more than one page
-    view = None
     if total_pages > 1:
         view = BanListView(banned_users, items_per_page, total_pages, current_page)
-
-    await interaction.followup.send(embed=embed, view=view)
+        await interaction.followup.send(embed=embed, view=view)
+    else:
+        await interaction.followup.send(embed=embed)
 
 # View class for pagination buttons
 class BanListView(discord.ui.View):
@@ -297,5 +297,38 @@ class BanListView(discord.ui.View):
         embed.set_footer(text=f"Page {self.current_page}/{self.total_pages}")
 
         await interaction.response.edit_message(embed=embed, view=self)
+
+# command for restoring items
+@bot.tree.command(name="restore", description="Queue items for restoration when user returns to Roblox game")
+@app_commands.guilds(GUILD)   # <-- make it server-scoped
+@app_commands.describe(
+    username="roblox username to restore items for",
+    items="items to restore (comma-separated list)"
+)
+async def restore(interaction: discord.Interaction, username: str, items: str):
+    if not has_ban_permission(interaction):
+        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        return
+
+    await interaction.response.defer()
+
+    # Send request to API server
+    api_url = os.getenv('API_SERVER_URL', 'http://localhost:3000')
+    payload = {
+        "username": username,
+        "items": items
+    }
+
+    try:
+        response = requests.post(f"{api_url}/restore", json=payload)
+
+        if response.status_code == 200:
+            data = response.json()
+            await interaction.followup.send(f"✅ Items queued for restoration: **{username}**\nItems: {items}")
+        else:
+            error_data = response.json()
+            await interaction.followup.send(f"❌ Failed to queue restoration: {error_data.get('error', 'Unknown error')}", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error communicating with API server: {str(e)}", ephemeral=True)
 
 bot.run(DISCORD_TOKEN)

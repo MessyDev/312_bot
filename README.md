@@ -1,164 +1,360 @@
-# Discord Bot - 312_bot
+# 312_bot - Discord Bot with Roblox Integration
 
-A Discord bot made specifically for D:312.
-
-## Setup
-
-1. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-
-2. Set up Google Sheets:
-   - Create a Google Cloud Project
-   - Enable Google Sheets API
-   - Create a Service Account and download the JSON credentials file
-   - Place the credentials.json file in the project root
-   - Create a Google Sheet and share it with the service account email
-   - Copy the Spreadsheet ID from the URL and update .env
-
-3. Update .env with your credentials:
-   - DISCORD_TOKEN: Your Discord bot token
-   - GOOGLE_SHEETS_CREDENTIALS: Path to credentials.json (default: credentials.json)
-   - SPREADSHEET_ID: Your Google Sheet ID
-
-4. Run the bot:
-   ```
-   python bot.py
-   ```
+A Discord bot integrated with an Express.js API server for managing Roblox user bans and item restorations. The bot provides slash commands for moderation and saves announcements to Google Sheets.
 
 ## Features
 
-- Monitors the 'announcements' channel
-- Saves each message content as a string to Google Sheets
+- **Discord Moderation**: Ban users on Discord with DM notifications and appeal links
+- **Roblox Ban Management**: Ban/unban Roblox users with support for temporary bans (durations like 30s, 1m, 5h, 10d, 2y)
+- **Ban List Management**: View paginated lists of banned users with expiration details
+- **Item Restoration**: Queue items for restoration when banned users return to Roblox games
+- **Announcement Monitoring**: Automatically saves messages from a specific Discord channel to Google Sheets
+- **REST API**: Express.js server providing endpoints for ban management and restoration queue
+- **Local Storage**: Uses JSON files for persistent storage of ban lists and restoration queues
 
-## Ban Command Feature
+## Setup
 
-This bot now includes a `/ban` slash command to ban users on Discord or Roblox.
+### Prerequisites
 
-### Usage
+- Node.js (for API server)
+- Python 3.8+ (for Discord bot)
+- Google Cloud Project with Sheets API enabled
+- Discord Bot Token
 
-- `/ban platform:<discord|roblox> discord_user:@user roblox_username:<username> reason:<reason> duration:<duration>`
-- `/unban roblox_username:<username>`
-- `/getbanlist`
-- `/restore username:<username> items:<item1,item2,item3>`
-- `/restorerequests`
+### 1. Clone and Install Dependencies
 
-### Discord Ban
+```bash
+# Install Python dependencies for the bot
+pip install -r requirements.txt
 
-- Sends a DM to the user with a ban message, reason, and an appeal link: https://appealexample.com
-- Bans the user from the Discord server.
+# Install Node.js dependencies for the API server
+npm install
+```
 
-### Roblox Ban
+### 2. Set up Google Sheets Integration
 
-- Bans users locally by storing their User IDs in a JSON file with ban details.
-- Supports ban duration (e.g., 30s, 1m, 5h, 10d, 2y) with automatic expiration.
-- The API server maintains the ban list and provides it to Roblox scripts.
-- Roblox scripts poll the API server every second to check for banned users.
-- Includes unban functionality and paginated ban list viewing.
+1. Create a Google Cloud Project at https://console.cloud.google.com/
+2. Enable the Google Sheets API
+3. Create a Service Account and download the JSON credentials file
+4. Create a new Google Sheet and share it with the service account email (found in the JSON file)
+5. Copy the Spreadsheet ID from the sheet's URL (the long string between `/d/` and `/edit`)
 
-### Setup for Local Roblox Ban System
+### 3. Environment Configuration
 
-1. **Start the API server**:
-   ```bash
-   npm install
-   npm start
-   ```
+Create a `.env` file in the project root with the following variables:
 
-2. **Implement ban checking in your Roblox game**:
-   - Add a server script that polls the API server every second
-   - Check if any current players' UserIds are in the banned list
-   - Kick players who are banned
+```env
+# Discord Bot Configuration
+DISCORD_TOKEN=your_discord_bot_token_here
+GUILD_ID=your_discord_server_id_here
 
-3. **Example Roblox server script**:
-   ```lua
-   local HttpService = game:GetService("HttpService")
-   local Players = game:GetService("Players")
+# Google Sheets Configuration
+GOOGLE_SHEETS_CREDENTIALS=ski1111-d82ba6b3cf0a.json
+SPREADSHEET_ID=your_google_sheet_id_here
 
-   local API_URL = "http://your-server-ip:3000/banlist?platform=roblox"
+# API Server Configuration
+API_SERVER_URL=http://localhost:3000
+PORT=3000
+```
 
-   local function checkBanList()
-       local success, response = pcall(function()
-           return HttpService:GetAsync(API_URL)
-       end)
+### 4. Discord Bot Setup
 
-       if success then
-           local data = HttpService:JSONDecode(response)
-           if data.success and data.bannedUsers then
-               for _, player in ipairs(Players:GetPlayers()) do
-                   if table.find(data.bannedUsers, player.UserId) then
-                       player:Kick("You have been banned from this game.")
-                   end
-               end
-           end
-       end
-   end
-
-   while true do
-       checkBanList()
-       wait(1)
-   end
-   ```
-
-4. **Set environment variables in your `.env` file**:
-   - `API_SERVER_URL`: URL of your API server (default: http://localhost:3000)
-
-5. The bot will add banned users to the local ban list when using the /ban command.
+1. Go to https://discord.com/developers/applications
+2. Create a new application and add a bot
+3. Copy the bot token to your `.env` file
+4. Invite the bot to your server with the following permissions:
+   - Send Messages
+   - Use Slash Commands
+   - Ban Members
+   - Read Message History
+   - View Channels
 
 ## API Endpoints
 
-The API server provides the following endpoints for ban management and item restoration:
+The Express.js server provides REST endpoints for ban management and item restoration.
 
 ### Ban Management
 
 #### `POST /ban`
-Ban a user on Roblox.
-- **Body**: `{"platform": "roblox", "username": "string", "reason": "string", "duration": "string"}`
-- **Response**: `{"success": true, "message": "string", "banEntry": {...}}`
+Ban a Roblox user.
+
+**Request Body:**
+```json
+{
+  "platform": "roblox",
+  "username": "string",
+  "reason": "string",
+  "duration": "string" // optional, e.g., "30s", "1m", "5h", "10d", "2y"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Roblox user username has been banned",
+  "banEntry": {...},
+  "bannedUsers": [...]
+}
+```
 
 #### `POST /unban`
-Unban a user on Roblox.
-- **Body**: `{"platform": "roblox", "username": "string"}`
-- **Response**: `{"success": true, "message": "string"}`
+Unban a Roblox user.
+
+**Request Body:**
+```json
+{
+  "platform": "roblox",
+  "username": "string"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Roblox user username has been unbanned",
+  "removedBan": {...},
+  "bannedUsers": [...]
+}
+```
 
 #### `GET /banlist?platform=roblox`
 Get the list of banned Roblox users.
-- **Response**: `{"success": true, "bannedUsers": [...], "count": number}`
+
+**Response:**
+```json
+{
+  "success": true,
+  "bannedUsers": [...],
+  "count": 5
+}
+```
 
 ### Item Restoration
 
 #### `POST /restore`
-Queue items for restoration when user returns to game.
-- **Body**: `{"username": "string", "items": "string" or ["string"]}`
-- **Response**: `{"success": true, "message": "string"}`
+Queue items for restoration when a user returns to the game.
+
+**Request Body:**
+```json
+{
+  "username": "string",
+  "items": "string" // or ["string1", "string2"]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Restoration queue updated for user username",
+  "restorationQueue": [...]
+}
+```
 
 #### `GET /restorationqueue`
 Get the current restoration queue.
-- **Response**: `{"success": true, "queue": [...], "count": number}`
+
+**Response:**
+```json
+{
+  "success": true,
+  "queue": [...],
+  "count": 3
+}
+```
 
 #### `POST /restore/confirm`
-Confirm that restoration has been completed.
-- **Body**: `{"username": "string"}`
-- **Response**: `{"success": true, "message": "string"}`
+Confirm that restoration has been completed (called by Roblox scripts).
+
+**Request Body:**
+```json
+{
+  "username": "string"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Restoration confirmed and queue cleared for user username"
+}
+```
 
 ### Health Check
 
 #### `GET /health`
 Check if the API server is running.
-- **Response**: `{"status": "OK", "message": "API server is running"}`
 
-### Environment Variables
+**Response:**
+```json
+{
+  "status": "OK",
+  "message": "API server is running"
+}
+```
 
-- `DISCORD_TOKEN`: Your Discord bot token.
-- `GOOGLE_SHEETS_CREDENTIALS`: Path to your Google service account JSON.
-- `SPREADSHEET_ID`: Your Google Sheets spreadsheet ID.
-- `ROBLOX_API_KEY`: Your Roblox API key (for ban system).
-- `ROBLOX_UNIVERSE_ID`: Your Roblox game universe ID.
-- `API_SERVER_URL`: URL of your API server (default: http://localhost:3000).
+## Discord Commands
 
-### Running the Bot
+The bot provides slash commands for moderation and restoration management.
+
+### `/ban`
+Ban a user on Discord or Roblox.
+
+**Parameters:**
+- `platform`: discord or roblox
+- `discord_user`: Discord user to ban (required for Discord bans)
+- `roblox_username`: Roblox username to ban (required for Roblox bans)
+- `reason`: Reason for the ban (optional)
+- `duration`: Ban duration (optional, only for Roblox, e.g., "30s", "1m", "5h", "10d", "2y")
+
+**Permissions:** Administrator or specific roles
+
+### `/unban`
+Unban a Roblox user.
+
+**Parameters:**
+- `roblox_username`: Roblox username to unban
+
+**Permissions:** Administrator or specific roles
+
+### `/getbanlist`
+Get the list of banned Roblox users with pagination.
+
+**Permissions:** Administrator or specific roles
+
+### `/restore`
+Queue items for restoration when a user returns to the Roblox game.
+
+**Parameters:**
+- `username`: Roblox username
+- `items`: Comma-separated list of items to restore
+
+**Permissions:** Administrator or specific roles
+
+### `/restorerequests`
+Get the list of pending restoration requests with pagination.
+
+**Permissions:** Administrator or specific roles
+
+## Running the Project
+
+### Start the API Server
 
 ```bash
-pip install -r requirements.txt
+npm start
+```
+
+The server will run on `http://localhost:3000` by default.
+
+### Start the Discord Bot
+
+```bash
 python bot.py
 ```
+
+### Integration with Roblox Games
+
+To integrate ban checking into your Roblox game:
+
+1. Add a server script that periodically checks the ban list
+2. Use the `/banlist` endpoint to get banned user IDs
+3. Kick players whose UserId is in the banned list
+4. Use the `/restore/confirm` endpoint when restoring items for returned players
+
+**Example Roblox Server Script:**
+```lua
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+
+local API_URL = "http://your-server-ip:3000"
+
+local function checkBans()
+    local success, response = pcall(function()
+        return HttpService:GetAsync(API_URL .. "/banlist?platform=roblox")
+    end)
+
+    if success then
+        local data = HttpService:JSONDecode(response)
+        if data.success and data.bannedUsers then
+            for _, player in ipairs(Players:GetPlayers()) do
+                for _, banEntry in ipairs(data.bannedUsers) do
+                    if player.UserId == banEntry.userId then
+                        player:Kick("You have been banned from this game. Reason: " .. (banEntry.reason or "No reason provided"))
+                        break
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function checkRestorations()
+    local success, response = pcall(function()
+        return HttpService:GetAsync(API_URL .. "/restorationqueue")
+    end)
+
+    if success then
+        local data = HttpService:JSONDecode(response)
+        if data.success and data.queue then
+            for _, player in ipairs(Players:GetPlayers()) do
+                for _, entry in ipairs(data.queue) do
+                    if string.lower(player.Name) == string.lower(entry.username) then
+                        -- Restore items for the player
+                        -- Add your restoration logic here
+
+                        -- Confirm restoration
+                        local confirmSuccess, confirmResponse = pcall(function()
+                            return HttpService:PostAsync(API_URL .. "/restore/confirm", HttpService:JSONEncode({username = entry.username}), Enum.HttpContentType.ApplicationJson)
+                        end)
+                        break
+                    end
+                end
+            end
+        end
+    end
+end
+
+while true do
+    checkBans()
+    checkRestorations()
+    wait(5) -- Check every 5 seconds
+end
+```
+
+## File Structure
+
+```
+312_bot/
+├── bot.py                 # Discord bot main file
+├── request.js             # Express.js API server
+├── package.json           # Node.js dependencies
+├── requirements.txt       # Python dependencies
+├── README.md              # This file
+├── .env                   # Environment variables
+├── ban_list.json          # Local ban list storage
+├── restoration_queue.json # Local restoration queue storage
+├── ski1111-d82ba6b3cf0a.json # Google service account credentials
+└── .gitignore
+```
+
+## Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DISCORD_TOKEN` | Discord bot token | Yes |
+| `GUILD_ID` | Discord server ID | Yes |
+| `GOOGLE_SHEETS_CREDENTIALS` | Path to Google service account JSON | Yes |
+| `SPREADSHEET_ID` | Google Sheets spreadsheet ID | Yes |
+| `API_SERVER_URL` | URL of the API server | No (defaults to http://localhost:3000) |
+| `PORT` | Port for the API server | No (defaults to 3000) |
+
+## Permissions
+
+The bot requires specific Discord permissions and role IDs for ban commands. Update the `allowed_role_ids` in `bot.py` to match your server's moderator roles.
+
+## Support
+
+For issues or questions, please check the code comments or create an issue in the repository.

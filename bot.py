@@ -4,14 +4,65 @@ from discord.ext import commands
 import gspread
 import os
 import requests
-from dotenv import load_dotenv
+import json
 
-load_dotenv()
+# Load environment variables manually to handle multi-line JSON
+def load_env_vars():
+    env_vars = {}
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
 
-DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
-GOOGLE_CREDENTIALS = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
-SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
-GUILD_ID = int(os.getenv('GUILD_ID'))
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        lines = content.split('\n')
+        current_key = None
+        current_value = []
+
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+
+            if '=' in line and not current_key:
+                # Start of a new variable
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+
+                if key == 'GOOGLE_SHEETS_CREDENTIALS' and value.startswith('{'):
+                    # Multi-line JSON detected
+                    current_key = key
+                    current_value = [value]
+                else:
+                    # Regular variable
+                    if value.startswith('"') and value.endswith('"'):
+                        value = value[1:-1]
+                    env_vars[key] = value
+            elif current_key == 'GOOGLE_SHEETS_CREDENTIALS':
+                # Continue reading multi-line JSON
+                current_value.append(line)
+                if line.strip().endswith('}'):
+                    # End of JSON
+                    json_str = '\n'.join(current_value)
+                    if json_str.startswith('"') and json_str.endswith('"'):
+                        json_str = json_str[1:-1]
+                    env_vars[current_key] = json_str
+                    current_key = None
+                    current_value = []
+
+        # Set environment variables
+        for key, value in env_vars.items():
+            os.environ[key] = value
+
+    return env_vars
+
+env_vars = load_env_vars()
+
+DISCORD_TOKEN = env_vars.get('DISCORD_TOKEN')
+GOOGLE_CREDENTIALS = env_vars.get('GOOGLE_SHEETS_CREDENTIALS')
+SPREADSHEET_ID = env_vars.get('SPREADSHEET_ID')
+GUILD_ID = int(env_vars.get('GUILD_ID'))
 GUILD = discord.Object(id=GUILD_ID)
 
 intents = discord.Intents.default()
@@ -24,22 +75,15 @@ from io import StringIO
 
 def get_gspread_client():
     try:
-        # Try to parse as JSON string
+        # Parse the JSON credentials
         creds_json = json.loads(GOOGLE_CREDENTIALS)
-        creds_file = StringIO(json.dumps(creds_json))
-        client = gspread.service_account(filename=None, credentials=creds_file)
-        print("Google Sheets integration initialized successfully from JSON string")
+        client = gspread.service_account_from_dict(creds_json)
+        print("Google Sheets integration initialized successfully")
         return client
-    except Exception:
-        try:
-            # Fallback: treat as filename
-            client = gspread.service_account(filename=GOOGLE_CREDENTIALS)
-            print("Google Sheets integration initialized successfully from file")
-            return client
-        except Exception as e:
-            print(f"Google Sheets setup failed: {e}")
-            print("Bot will continue without Google Sheets integration")
-            return None
+    except Exception as e:
+        print(f"Google Sheets setup failed: {e}")
+        print("Bot will continue without Google Sheets integration")
+        return None
 
 gc = get_gspread_client()
 

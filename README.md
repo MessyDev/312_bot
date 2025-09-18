@@ -273,7 +273,7 @@ end
 |----------|-------------|----------|
 | `DISCORD_TOKEN` | Discord bot token | Yes |
 | `GUILD_ID` | Discord server ID | Yes |
-| `GOOGLE_SHEETS_CREDENTIALS` | Path to Google service account JSON | Yes |
+| `GOOGLE_SHEETS_CREDENTIALS` | Path to Google service account JSON file OR JSON string containing credentials | Yes |
 | `SPREADSHEET_ID` | Google Sheets spreadsheet ID | Yes |
 | `API_SERVER_URL` | URL of the API server | No (defaults to http://localhost:3000) |
 | `PORT` | Port for the API server | No (defaults to 3000) |

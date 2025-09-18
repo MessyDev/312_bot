@@ -19,15 +19,36 @@ intents.messages = True
 intents.message_content = True
 
 # google Sheets setup
-gc = gspread.service_account(filename=GOOGLE_CREDENTIALS)
+import json
+from io import StringIO
+
+def get_gspread_client():
+    try:
+        # Try to parse as JSON string
+        creds_json = json.loads(GOOGLE_CREDENTIALS)
+        creds_file = StringIO(json.dumps(creds_json))
+        client = gspread.service_account(filename=None, credentials=creds_file)
+        print("Google Sheets integration initialized successfully from JSON string")
+        return client
+    except Exception:
+        try:
+            # Fallback: treat as filename
+            client = gspread.service_account(filename=GOOGLE_CREDENTIALS)
+            print("Google Sheets integration initialized successfully from file")
+            return client
+        except Exception as e:
+            print(f"Google Sheets setup failed: {e}")
+            print("Bot will continue without Google Sheets integration")
+            return None
+
+gc = get_gspread_client()
 
 sheet = None
 try:
-    sheet = gc.open_by_key(SPREADSHEET_ID).sheet1
-    print("Google Sheets integration initialized successfully")
+    if gc:
+        sheet = gc.open_by_key(SPREADSHEET_ID).sheet1
 except Exception as e:
-    print(f"Google Sheets setup failed: {e}")
-    print("Bot will continue without Google Sheets integration")
+    print(f"Failed to open Google Sheet: {e}")
     sheet = None
 
 # switch to commands.Bot for slash commands support
@@ -47,7 +68,7 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    if str(message.channel.id) == "1417246932115390566":
+    if str(message.channel.id) == "1417246932115390566" or str(message.channel.id) == "1417915609391300658":
         # save the message content to Sheets
         if sheet is not None:
             sheet.append_row([str(message.content)])

@@ -21,54 +21,6 @@ A Discord bot integrated with an Express.js API server for managing Roblox user 
 - Google Cloud Project with Sheets API enabled
 - Discord Bot Token
 
-### 1. Clone and Install Dependencies
-
-```bash
-# Install Python dependencies for the bot
-pip install -r requirements.txt
-
-# Install Node.js dependencies for the API server
-npm install
-```
-
-### 2. Set up Google Sheets Integration
-
-1. Create a Google Cloud Project at https://console.cloud.google.com/
-2. Enable the Google Sheets API
-3. Create a Service Account and download the JSON credentials file
-4. Create a new Google Sheet and share it with the service account email (found in the JSON file)
-5. Copy the Spreadsheet ID from the sheet's URL (the long string between `/d/` and `/edit`)
-
-### 3. Environment Configuration
-
-Create a `.env` file in the project root with the following variables:
-
-```env
-# Discord Bot Configuration
-DISCORD_TOKEN=your_discord_bot_token_here
-GUILD_ID=your_discord_server_id_here
-
-# Google Sheets Configuration
-GOOGLE_SHEETS_CREDENTIALS=ski1111-d82ba6b3cf0a.json
-SPREADSHEET_ID=your_google_sheet_id_here
-
-# API Server Configuration
-API_SERVER_URL=http://localhost:3000
-PORT=3000
-```
-
-### 4. Discord Bot Setup
-
-1. Go to https://discord.com/developers/applications
-2. Create a new application and add a bot
-3. Copy the bot token to your `.env` file
-4. Invite the bot to your server with the following permissions:
-   - Send Messages
-   - Use Slash Commands
-   - Ban Members
-   - Read Message History
-   - View Channels
-
 ## API Endpoints
 
 The Express.js server provides REST endpoints for ban management and item restoration.
@@ -239,31 +191,6 @@ Get the list of pending restoration requests with pagination.
 
 **Permissions:** Administrator or specific roles
 
-## Running the Project
-
-### Start the API Server
-
-```bash
-npm start
-```
-
-The server will run on `http://localhost:3000` by default.
-
-### Start the Discord Bot
-
-```bash
-python bot.py
-```
-
-### Integration with Roblox Games
-
-To integrate ban checking into your Roblox game:
-
-1. Add a server script that periodically checks the ban list
-2. Use the `/banlist` endpoint to get banned user IDs
-3. Kick players whose UserId is in the banned list
-4. Use the `/restore/confirm` endpoint when restoring items for returned players
-
 **Example Roblox Server Script:**
 ```lua
 local HttpService = game:GetService("HttpService")
@@ -354,7 +281,3 @@ end
 ## Permissions
 
 The bot requires specific Discord permissions and role IDs for ban commands. Update the `allowed_role_ids` in `bot.py` to match your server's moderator roles.
-
-## Support
-
-For issues or questions, please check the code comments or create an issue in the repository.

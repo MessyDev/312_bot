@@ -21,11 +21,14 @@ intents.message_content = True
 # google Sheets setup
 gc = gspread.service_account(filename=GOOGLE_CREDENTIALS)
 
+sheet = None
 try:
     sheet = gc.open_by_key(SPREADSHEET_ID).sheet1
-except gspread.exceptions.APIError as e:
-    print(f"GSA error: {e}")
-    raise
+    print("Google Sheets integration initialized successfully")
+except Exception as e:
+    print(f"Google Sheets setup failed: {e}")
+    print("Bot will continue without Google Sheets integration")
+    sheet = None
 
 # switch to commands.Bot for slash commands support
 bot = commands.Bot(command_prefix="312.", intents=intents)
@@ -46,8 +49,11 @@ async def on_message(message):
 
     if str(message.channel.id) == "1417246932115390566":
         # save the message content to Sheets
-        sheet.append_row([str(message.content)])
-        print(f'saved message to Announcement Sheets: {message.content}')
+        if sheet is not None:
+            sheet.append_row([str(message.content)])
+            print(f'saved message to Announcement Sheets: {message.content}')
+        else:
+            print(f'Google Sheets not available, skipping save for message: {message.content}')
 
 # send DM and ban user
 async def ban_discord_user(guild: discord.Guild, user: discord.Member, reason: str):

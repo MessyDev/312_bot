@@ -42,6 +42,7 @@ This bot now includes a `/ban` slash command to ban users on Discord or Roblox.
 - `/unban roblox_username:<username>`
 - `/getbanlist`
 - `/restore username:<username> items:<item1,item2,item3>`
+- `/restorerequests`
 
 ### Discord Ban
 
@@ -104,6 +105,48 @@ This bot now includes a `/ban` slash command to ban users on Discord or Roblox.
 
 5. The bot will add banned users to the local ban list when using the /ban command.
 
+## API Endpoints
+
+The API server provides the following endpoints for ban management and item restoration:
+
+### Ban Management
+
+#### `POST /ban`
+Ban a user on Roblox.
+- **Body**: `{"platform": "roblox", "username": "string", "reason": "string", "duration": "string"}`
+- **Response**: `{"success": true, "message": "string", "banEntry": {...}}`
+
+#### `POST /unban`
+Unban a user on Roblox.
+- **Body**: `{"platform": "roblox", "username": "string"}`
+- **Response**: `{"success": true, "message": "string"}`
+
+#### `GET /banlist?platform=roblox`
+Get the list of banned Roblox users.
+- **Response**: `{"success": true, "bannedUsers": [...], "count": number}`
+
+### Item Restoration
+
+#### `POST /restore`
+Queue items for restoration when user returns to game.
+- **Body**: `{"username": "string", "items": "string" or ["string"]}`
+- **Response**: `{"success": true, "message": "string"}`
+
+#### `GET /restorationqueue`
+Get the current restoration queue.
+- **Response**: `{"success": true, "queue": [...], "count": number}`
+
+#### `POST /restore/confirm`
+Confirm that restoration has been completed.
+- **Body**: `{"username": "string"}`
+- **Response**: `{"success": true, "message": "string"}`
+
+### Health Check
+
+#### `GET /health`
+Check if the API server is running.
+- **Response**: `{"status": "OK", "message": "API server is running"}`
+
 ### Environment Variables
 
 - `DISCORD_TOKEN`: Your Discord bot token.
@@ -111,6 +154,7 @@ This bot now includes a `/ban` slash command to ban users on Discord or Roblox.
 - `SPREADSHEET_ID`: Your Google Sheets spreadsheet ID.
 - `ROBLOX_API_KEY`: Your Roblox API key (for ban system).
 - `ROBLOX_UNIVERSE_ID`: Your Roblox game universe ID.
+- `API_SERVER_URL`: URL of your API server (default: http://localhost:3000).
 
 ### Running the Bot
 

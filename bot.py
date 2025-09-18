@@ -331,4 +331,118 @@ async def restore(interaction: discord.Interaction, username: str, items: str):
     except Exception as e:
         await interaction.followup.send(f"❌ Error communicating with API server: {str(e)}", ephemeral=True)
 
+# command for getting restoration requests
+@bot.tree.command(name="restorerequests", description="Get the list of pending restoration requests")
+@app_commands.guilds(GUILD)   # <-- make it server-scoped
+async def restorerequests(interaction: discord.Interaction):
+    if not has_ban_permission(interaction):
+        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        return
+
+    await interaction.response.defer()
+
+    # Get restoration queue from API server
+    api_url = os.getenv('API_SERVER_URL', 'http://localhost:3000')
+
+    try:
+        response = requests.get(f"{api_url}/restorationqueue")
+
+        if response.status_code == 200:
+            data = response.json()
+            restoration_queue = data.get('queue', [])
+
+            if not restoration_queue:
+                await interaction.followup.send("No pending restoration requests found.")
+                return
+
+            # Pagination setup
+            items_per_page = 5
+            total_pages = (len(restoration_queue) + items_per_page - 1) // items_per_page
+
+            # Create embed for first page
+            embed = discord.Embed(title="Pending Restoration Requests", color=0x00ff00)
+
+            # Display current page (starting from 1)
+            current_page = 1
+            start_idx = (current_page - 1) * items_per_page
+            end_idx = min(start_idx + items_per_page, len(restoration_queue))
+
+            restoration_text = ""
+            for i in range(start_idx, end_idx):
+                entry = restoration_queue[i]
+                username = entry.get('username', 'Unknown')
+                items = entry.get('items', [])
+                queued_at = entry.get('queuedAt')
+
+                if queued_at:
+                    queued_date = f"<t:{int(queued_at / 1000)}:R>"
+                else:
+                    queued_date = "Unknown"
+
+                restoration_text += f"**{username}**\n"
+                restoration_text += f"Items: {', '.join(items)}\n"
+                restoration_text += f"Queued: {queued_date}\n\n"
+
+            embed.description = restoration_text
+            embed.set_footer(text=f"Page {current_page}/{total_pages}")
+
+            # Add navigation buttons if more than one page
+            if total_pages > 1:
+                view = RestorationRequestsView(restoration_queue, items_per_page, total_pages, current_page)
+                await interaction.followup.send(embed=embed, view=view)
+            else:
+                await interaction.followup.send(embed=embed)
+        else:
+            await interaction.followup.send("❌ Failed to fetch restoration requests.", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error communicating with API server: {str(e)}", ephemeral=True)
+
+# View class for restoration requests pagination buttons
+class RestorationRequestsView(discord.ui.View):
+    def __init__(self, restoration_queue, items_per_page, total_pages, current_page):
+        super().__init__(timeout=300)  # 5 minutes timeout
+        self.restoration_queue = restoration_queue
+        self.items_per_page = items_per_page
+        self.total_pages = total_pages
+        self.current_page = current_page
+
+    @discord.ui.button(label="⬅️ Previous", style=discord.ButtonStyle.primary)
+    async def previous_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page > 1:
+            self.current_page -= 1
+            await self.update_embed(interaction)
+
+    @discord.ui.button(label="➡️ Next", style=discord.ButtonStyle.primary)
+    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_page < self.total_pages:
+            self.current_page += 1
+            await self.update_embed(interaction)
+
+    async def update_embed(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="Pending Restoration Requests", color=0x00ff00)
+
+        start_idx = (self.current_page - 1) * self.items_per_page
+        end_idx = min(start_idx + self.items_per_page, len(self.restoration_queue))
+
+        restoration_text = ""
+        for i in range(start_idx, end_idx):
+            entry = self.restoration_queue[i]
+            username = entry.get('username', 'Unknown')
+            items = entry.get('items', [])
+            queued_at = entry.get('queuedAt')
+
+            if queued_at:
+                queued_date = f"<t:{int(queued_at / 1000)}:R>"
+            else:
+                queued_date = "Unknown"
+
+            restoration_text += f"**{username}**\n"
+            restoration_text += f"Items: {', '.join(items)}\n"
+            restoration_text += f"Queued: {queued_date}\n\n"
+
+        embed.description = restoration_text
+        embed.set_footer(text=f"Page {self.current_page}/{self.total_pages}")
+
+        await interaction.response.edit_message(embed=embed, view=self)
+
 bot.run(DISCORD_TOKEN)
